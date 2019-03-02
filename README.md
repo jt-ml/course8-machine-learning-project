@@ -1,1 +1,1 @@
-# course8-machine-learning-project
+# Machine Learning Project
