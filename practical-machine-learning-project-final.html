@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+<head>
+
+<meta charset="utf-8" />
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta name="generator" content="pandoc" />
+
+
+<meta name="author" content="jtang" />
+
+<meta name="date" content="2019-02-23" />
+
+<title>Practical Machine Learning Project</title>
+
+<style type="text/css">code{white-space: pre;}</style>
+<style type="text/css">
+  pre:not([class]) {
+    background-color: white;
+  }
+</style>
+<script type="text/javascript">
+if (window.hljs) {
+  hljs.configure({languages: []});
+  hljs.initHighlightingOnLoad();
+  if (document.readyState && document.readyState === "complete") {
+    window.setTimeout(function() { hljs.initHighlighting(); }, 0);
+  }
+}
+</script>
+
+
+
+<style type="text/css">
+h1 {
+  font-size: 34px;
+}
+h1.title {
+  font-size: 38px;
+}
+h2 {
+  font-size: 30px;
+}
+h3 {
+  font-size: 24px;
+}
+h4 {
+  font-size: 18px;
+}
+h5 {
+  font-size: 16px;
+}
+h6 {
+  font-size: 12px;
+}
+.table th:not([align]) {
+  text-align: left;
+}
+</style>
+
+
+</head>
+
+<body>
+
+<style type="text/css">
+.main-container {
+  max-width: 940px;
+  margin-left: auto;
+  margin-right: auto;
+}
+code {
+  color: inherit;
+  background-color: rgba(0, 0, 0, 0.04);
+}
+img {
+  max-width:100%;
+  height: auto;
+}
+.tabbed-pane {
+  padding-top: 12px;
+}
+.html-widget {
+  margin-bottom: 20px;
+}
+button.code-folding-btn:focus {
+  outline: none;
+}
+</style>
+
+
+
+<div class="container-fluid main-container">
+
+<!-- tabsets -->
+<script>
+$(document).ready(function () {
+  window.buildTabsets("TOC");
+});
+</script>
+
+<!-- code folding -->
+
+
+
+
+
+
+<div class="fluid-row" id="header">
+
+
+
+<h1 class="title toc-ignore">Practical Machine Learning Project</h1>
+<h4 class="author"><em>jtang</em></h4>
+<h4 class="date"><em>February 23, 2019</em></h4>
+
+</div>
+
+
+<div id="overview" class="section level2">
+<h2>Overview</h2>
+<p>The goald of this project is to predict the manner in which they did the exercise.</p>
+</div>
+<div id="data" class="section level2">
+<h2>Data</h2>
+<ul>
+<li><p>The training data for this project are available here: <a href="https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv" class="uri">https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv</a></p></li>
+<li><p>The test data are available here: <a href="https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv" class="uri">https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv</a></p></li>
+</ul>
+<div id="loading-data" class="section level3">
+<h3>Loading Data</h3>
+<p>Train set and Test Schema Verification</p>
+<pre class="r"><code># Confirm both training set and test set contain identical variables 
+#  - excluding variable 'classe' from training set 
+#  - excluding variable 'problem_id' from test set
+
+all.equal(colnames(raw_train)[1:(ncol(raw_train) - 1)], 
+          colnames(raw_test)[1:(ncol(raw_train) - 1)])</code></pre>
+<pre><code>## [1] TRUE</code></pre>
+</div>
+<div id="exploratory-data-analysis" class="section level3">
+<h3>Exploratory Data Analysis</h3>
+<p>Trainging data set</p>
+<pre class="r"><code># trainging data
+
+dim(raw_train)</code></pre>
+<pre><code>## [1] 19622   160</code></pre>
+<pre class="r"><code># testing data
+dim(raw_test)</code></pre>
+<pre><code>## [1]  20 160</code></pre>
+<pre class="r"><code># head(dt_train)</code></pre>
+</div>
+<div id="prepare-environments" class="section level3">
+<h3>Prepare Environments</h3>
+<pre class="r"><code>library(caret)
+library(gbm)
+library(randomForest)
+library(rpart)
+library(rpart.plot)
+library(corrplot)
+library(rattle)
+library(RColorBrewer)
+library(e1071)
+set.seed(2019)</code></pre>
+</div>
+<div id="data-cleaning-and-tidying" class="section level3">
+<h3>Data Cleaning and Tidying</h3>
+<ol style="list-style-type: decimal">
+<li>Remove variables that contain any missing values.</li>
+</ol>
+<pre class="r"><code>dt_train &lt;- raw_train[, colSums(is.na(raw_train)) == 0]
+dt_test &lt;- raw_test[, colSums(is.na(raw_test)) == 0]
+
+# dimension of training set
+dim(dt_train)</code></pre>
+<pre><code>## [1] 19622    60</code></pre>
+<pre class="r"><code>colnames(dt_train)</code></pre>
+<pre><code>##  [1] &quot;X&quot;                    &quot;user_name&quot;            &quot;raw_timestamp_part_1&quot;
+##  [4] &quot;raw_timestamp_part_2&quot; &quot;cvtd_timestamp&quot;       &quot;new_window&quot;          
+##  [7] &quot;num_window&quot;           &quot;roll_belt&quot;            &quot;pitch_belt&quot;          
+## [10] &quot;yaw_belt&quot;             &quot;total_accel_belt&quot;     &quot;gyros_belt_x&quot;        
+## [13] &quot;gyros_belt_y&quot;         &quot;gyros_belt_z&quot;         &quot;accel_belt_x&quot;        
+## [16] &quot;accel_belt_y&quot;         &quot;accel_belt_z&quot;         &quot;magnet_belt_x&quot;       
+## [19] &quot;magnet_belt_y&quot;        &quot;magnet_belt_z&quot;        &quot;roll_arm&quot;            
+## [22] &quot;pitch_arm&quot;            &quot;yaw_arm&quot;              &quot;total_accel_arm&quot;     
+## [25] &quot;gyros_arm_x&quot;          &quot;gyros_arm_y&quot;          &quot;gyros_arm_z&quot;         
+## [28] &quot;accel_arm_x&quot;          &quot;accel_arm_y&quot;          &quot;accel_arm_z&quot;         
+## [31] &quot;magnet_arm_x&quot;         &quot;magnet_arm_y&quot;         &quot;magnet_arm_z&quot;        
+## [34] &quot;roll_dumbbell&quot;        &quot;pitch_dumbbell&quot;       &quot;yaw_dumbbell&quot;        
+## [37] &quot;total_accel_dumbbell&quot; &quot;gyros_dumbbell_x&quot;     &quot;gyros_dumbbell_y&quot;    
+## [40] &quot;gyros_dumbbell_z&quot;     &quot;accel_dumbbell_x&quot;     &quot;accel_dumbbell_y&quot;    
+## [43] &quot;accel_dumbbell_z&quot;     &quot;magnet_dumbbell_x&quot;    &quot;magnet_dumbbell_y&quot;   
+## [46] &quot;magnet_dumbbell_z&quot;    &quot;roll_forearm&quot;         &quot;pitch_forearm&quot;       
+## [49] &quot;yaw_forearm&quot;          &quot;total_accel_forearm&quot;  &quot;gyros_forearm_x&quot;     
+## [52] &quot;gyros_forearm_y&quot;      &quot;gyros_forearm_z&quot;      &quot;accel_forearm_x&quot;     
+## [55] &quot;accel_forearm_y&quot;      &quot;accel_forearm_z&quot;      &quot;magnet_forearm_x&quot;    
+## [58] &quot;magnet_forearm_y&quot;     &quot;magnet_forearm_z&quot;     &quot;classe&quot;</code></pre>
+<pre class="r"><code># dimension of test set
+dim(dt_test)</code></pre>
+<pre><code>## [1] 20 60</code></pre>
+<pre class="r"><code>colnames(dt_test)</code></pre>
+<pre><code>##  [1] &quot;X&quot;                    &quot;user_name&quot;            &quot;raw_timestamp_part_1&quot;
+##  [4] &quot;raw_timestamp_part_2&quot; &quot;cvtd_timestamp&quot;       &quot;new_window&quot;          
+##  [7] &quot;num_window&quot;           &quot;roll_belt&quot;            &quot;pitch_belt&quot;          
+## [10] &quot;yaw_belt&quot;             &quot;total_accel_belt&quot;     &quot;gyros_belt_x&quot;        
+## [13] &quot;gyros_belt_y&quot;         &quot;gyros_belt_z&quot;         &quot;accel_belt_x&quot;        
+## [16] &quot;accel_belt_y&quot;         &quot;accel_belt_z&quot;         &quot;magnet_belt_x&quot;       
+## [19] &quot;magnet_belt_y&quot;        &quot;magnet_belt_z&quot;        &quot;roll_arm&quot;            
+## [22] &quot;pitch_arm&quot;            &quot;yaw_arm&quot;              &quot;total_accel_arm&quot;     
+## [25] &quot;gyros_arm_x&quot;          &quot;gyros_arm_y&quot;          &quot;gyros_arm_z&quot;         
+## [28] &quot;accel_arm_x&quot;          &quot;accel_arm_y&quot;          &quot;accel_arm_z&quot;         
+## [31] &quot;magnet_arm_x&quot;         &quot;magnet_arm_y&quot;         &quot;magnet_arm_z&quot;        
+## [34] &quot;roll_dumbbell&quot;        &quot;pitch_dumbbell&quot;       &quot;yaw_dumbbell&quot;        
+## [37] &quot;total_accel_dumbbell&quot; &quot;gyros_dumbbell_x&quot;     &quot;gyros_dumbbell_y&quot;    
+## [40] &quot;gyros_dumbbell_z&quot;     &quot;accel_dumbbell_x&quot;     &quot;accel_dumbbell_y&quot;    
+## [43] &quot;accel_dumbbell_z&quot;     &quot;magnet_dumbbell_x&quot;    &quot;magnet_dumbbell_y&quot;   
+## [46] &quot;magnet_dumbbell_z&quot;    &quot;roll_forearm&quot;         &quot;pitch_forearm&quot;       
+## [49] &quot;yaw_forearm&quot;          &quot;total_accel_forearm&quot;  &quot;gyros_forearm_x&quot;     
+## [52] &quot;gyros_forearm_y&quot;      &quot;gyros_forearm_z&quot;      &quot;accel_forearm_x&quot;     
+## [55] &quot;accel_forearm_y&quot;      &quot;accel_forearm_z&quot;      &quot;magnet_forearm_x&quot;    
+## [58] &quot;magnet_forearm_y&quot;     &quot;magnet_forearm_z&quot;     &quot;problem_id&quot;</code></pre>
+<ol style="list-style-type: decimal">
+<li>Remove identification variables which have no impacts on the prediction outcome: <strong>classe</strong></li>
+</ol>
+<pre class="r"><code>dt_train &lt;- dt_train[, -(1:5)]
+dt_test &lt;- dt_test[, -(1:5)]
+
+# dimension of training set
+dim(dt_train)</code></pre>
+<pre><code>## [1] 19622    55</code></pre>
+<pre class="r"><code># dimension of test set
+dim(dt_test)</code></pre>
+<pre><code>## [1] 20 55</code></pre>
+<ol start="2" style="list-style-type: decimal">
+<li>Remove variables which variance are near zero</li>
+</ol>
+<pre class="r"><code>near_zero &lt;- nearZeroVar(dt_train)
+dt_train &lt;- dt_train[, -near_zero]
+
+dim(dt_train)</code></pre>
+<pre><code>## [1] 19622    54</code></pre>
+</div>
+<div id="split-training-set-for-model-training" class="section level3">
+<h3>Split training set for model training</h3>
+<p>Partition training set into 70% as train data for the modeling process, and 30% as test data for the model validation. The original test set remains unchanged.</p>
+<pre class="r"><code>model_train_split &lt;- createDataPartition(dt_train$classe, p = 0.7, list = FALSE)
+model_train = dt_train[model_train_split, ]
+model_test = dt_train[-model_train_split, ]</code></pre>
+<pre class="r"><code>dim(model_train)</code></pre>
+<pre><code>## [1] 13737    54</code></pre>
+<pre class="r"><code>dim(model_test)</code></pre>
+<pre><code>## [1] 5885   54</code></pre>
+</div>
+<div id="variable-correlation-analysis" class="section level3">
+<h3>Variable Correlation Analysis</h3>
+<pre class="r"><code>corr_matrix &lt;- cor(model_train[, -54])
+corrplot(corr_matrix, 
+         order=&quot;FPC&quot;, method = 'circle', type='upper',
+         tl.cex = 0.6, tl.offset = 0.5, tl.col = 'darkblue')</code></pre>
+<p><img src="figure-html/unnamed-chunk-11-1.png" width="672" /></p>
+<p><em>The highly correlated variables are shown in dark circle in the figure above.</em></p>
+<p>The names of highly correlated variables are</p>
+<pre class="r"><code>names(model_train)[findCorrelation(corr_matrix, cutoff = 0.75)]</code></pre>
+<pre><code>##  [1] &quot;accel_belt_z&quot;      &quot;roll_belt&quot;         &quot;accel_belt_y&quot;     
+##  [4] &quot;total_accel_belt&quot;  &quot;accel_dumbbell_z&quot;  &quot;accel_belt_x&quot;     
+##  [7] &quot;pitch_belt&quot;        &quot;magnet_dumbbell_x&quot; &quot;accel_dumbbell_y&quot; 
+## [10] &quot;magnet_dumbbell_y&quot; &quot;accel_dumbbell_x&quot;  &quot;accel_arm_x&quot;      
+## [13] &quot;accel_arm_z&quot;       &quot;magnet_arm_y&quot;      &quot;magnet_belt_z&quot;    
+## [16] &quot;accel_forearm_y&quot;   &quot;gyros_forearm_y&quot;   &quot;gyros_dumbbell_x&quot; 
+## [19] &quot;gyros_dumbbell_z&quot;  &quot;gyros_arm_x&quot;</code></pre>
+</div>
+</div>
+<div id="prediction-model-building" class="section level2">
+<h2>Prediction Model Building</h2>
+<p>To model the regressions, there are three commonly applied algorithms: 1. classification tree 2. Random Forest 3. Generalized Boosted Model</p>
+<p>I will examine the performance of each algorithm and choose the best algorithm for this project.</p>
+<div id="select-prediction-algorithm" class="section level3">
+<h3>Select Prediction Algorithm</h3>
+<div id="algorithm-classification-tree" class="section level4">
+<h4>1. Algorithm: Classification Tree</h4>
+<ol style="list-style-type: decimal">
+<li>Train the model using classification tree</li>
+</ol>
+<pre class="r"><code>model_decisionTree &lt;- rpart(classe ~., data = model_train, method = 'class')
+fancyRpartPlot(model_decisionTree)</code></pre>
+<p><img src="figure-html/unnamed-chunk-13-1.png" width="672" /></p>
+<pre class="r"><code># plot the model
+plot(model_decisionTree)</code></pre>
+<p><img src="figure-html/unnamed-chunk-14-1.png" width="672" /></p>
+<ol start="2" style="list-style-type: decimal">
+<li>Validate the model</li>
+</ol>
+<pre class="r"><code># prediction on test data
+predict_decisionTree &lt;- predict(model_decisionTree, model_test, type='class')
+result_decisionTree &lt;- confusionMatrix(predict_decisionTree, model_test$classe)
+result_decisionTree</code></pre>
+<pre><code>## Confusion Matrix and Statistics
+## 
+##           Reference
+## Prediction    A    B    C    D    E
+##          A 1466  149   55   38   19
+##          B   97  755   55   33   18
+##          C   40   55  726   71    4
+##          D   60  154  175  774  222
+##          E   11   26   15   48  819
+## 
+## Overall Statistics
+##                                           
+##                Accuracy : 0.7715          
+##                  95% CI : (0.7605, 0.7821)
+##     No Information Rate : 0.2845          
+##     P-Value [Acc &gt; NIR] : &lt; 2.2e-16       
+##                                           
+##                   Kappa : 0.7111          
+##  Mcnemar's Test P-Value : &lt; 2.2e-16       
+## 
+## Statistics by Class:
+## 
+##                      Class: A Class: B Class: C Class: D Class: E
+## Sensitivity            0.8757   0.6629   0.7076   0.8029   0.7569
+## Specificity            0.9380   0.9572   0.9650   0.8758   0.9792
+## Pos Pred Value         0.8489   0.7881   0.8103   0.5588   0.8912
+## Neg Pred Value         0.9500   0.9221   0.9399   0.9578   0.9470
+## Prevalence             0.2845   0.1935   0.1743   0.1638   0.1839
+## Detection Rate         0.2491   0.1283   0.1234   0.1315   0.1392
+## Detection Prevalence   0.2935   0.1628   0.1523   0.2353   0.1562
+## Balanced Accuracy      0.9069   0.8100   0.8363   0.8394   0.8681</code></pre>
+<pre class="r"><code># plot the prediction result 
+
+plot(result_decisionTree$table, 
+     col = result_decisionTree$byClass,
+     main = paste('Classfication Tree: Accuracy = ', 
+                  round(result_decisionTree$overall['Accuracy'],4) * 100,
+                  '%'))</code></pre>
+<p><img src="figure-html/unnamed-chunk-16-1.png" width="672" /></p>
+<p>The accuracy of above model is 77.15% and its <em>out-of-sample error</em> is 22.85%.</p>
+</div>
+<div id="algorithm-random-forest" class="section level4">
+<h4>2. Algorithm: Random Forest</h4>
+<ol style="list-style-type: decimal">
+<li>Train the model using Random Forest</li>
+</ol>
+<pre class="r"><code>model_randomForest &lt;- train(classe ~., 
+                            data = model_train,
+                            method = 'rf',
+                            trControl = trainControl(method=&quot;cv&quot;, 
+                                                     number=4,
+                                                     verboseIter = FALSE))
+model_randomForest$finalModel</code></pre>
+<pre><code>## 
+## Call:
+##  randomForest(x = x, y = y, mtry = param$mtry) 
+##                Type of random forest: classification
+##                      Number of trees: 500
+## No. of variables tried at each split: 27
+## 
+##         OOB estimate of  error rate: 0.19%
+## Confusion matrix:
+##      A    B    C    D    E  class.error
+## A 3905    0    0    0    1 0.0002560164
+## B    6 2650    1    1    0 0.0030097818
+## C    0    4 2392    0    0 0.0016694491
+## D    0    0    7 2244    1 0.0035523979
+## E    0    1    0    4 2520 0.0019801980</code></pre>
+<pre class="r"><code># plot the model
+plot(model_randomForest)</code></pre>
+<p><img src="figure-html/unnamed-chunk-18-1.png" width="672" /></p>
+<ol start="2" style="list-style-type: decimal">
+<li>Validate the model</li>
+</ol>
+<pre class="r"><code># prediction on test data
+predict_randomForest &lt;- predict(model_randomForest, model_test)
+result_randomForest &lt;- confusionMatrix(predict_randomForest, model_test$classe)
+result_randomForest</code></pre>
+<pre><code>## Confusion Matrix and Statistics
+## 
+##           Reference
+## Prediction    A    B    C    D    E
+##          A 1674    3    0    0    0
+##          B    0 1134    2    0    0
+##          C    0    2 1024    5    0
+##          D    0    0    0  959    1
+##          E    0    0    0    0 1081
+## 
+## Overall Statistics
+##                                           
+##                Accuracy : 0.9978          
+##                  95% CI : (0.9962, 0.9988)
+##     No Information Rate : 0.2845          
+##     P-Value [Acc &gt; NIR] : &lt; 2.2e-16       
+##                                           
+##                   Kappa : 0.9972          
+##  Mcnemar's Test P-Value : NA              
+## 
+## Statistics by Class:
+## 
+##                      Class: A Class: B Class: C Class: D Class: E
+## Sensitivity            1.0000   0.9956   0.9981   0.9948   0.9991
+## Specificity            0.9993   0.9996   0.9986   0.9998   1.0000
+## Pos Pred Value         0.9982   0.9982   0.9932   0.9990   1.0000
+## Neg Pred Value         1.0000   0.9989   0.9996   0.9990   0.9998
+## Prevalence             0.2845   0.1935   0.1743   0.1638   0.1839
+## Detection Rate         0.2845   0.1927   0.1740   0.1630   0.1837
+## Detection Prevalence   0.2850   0.1930   0.1752   0.1631   0.1837
+## Balanced Accuracy      0.9996   0.9976   0.9983   0.9973   0.9995</code></pre>
+<pre class="r"><code># plot the prediction result 
+
+plot(result_randomForest$table, 
+     col = result_randomForest$byClass,
+     main = paste('Random Forest: Accuracy = ', 
+                  round(result_randomForest$overall['Accuracy'],4) * 100,
+                  '%'))</code></pre>
+<p><img src="figure-html/unnamed-chunk-20-1.png" width="672" /></p>
+<p>The accuracy of above model is 99.78% and its out-of-sample error is only 0.22% which is every good.</p>
+</div>
+<div id="algorithm-generalized-boosted-model" class="section level4">
+<h4>3. Algorithm: Generalized Boosted Model</h4>
+<ol style="list-style-type: decimal">
+<li>Train the model using Generalized Boosted Model</li>
+</ol>
+<pre class="r"><code>model_GBM &lt;- train(classe ~., 
+                    data = model_train,
+                    method = 'gbm',
+                    trControl = trainControl(method=&quot;repeatedcv&quot;, 
+                                             number= 5,
+                                             repeats = 1,
+                                             verboseIter = FALSE),
+                   verbose = FALSE)
+
+model_GBM$finalModel</code></pre>
+<pre><code>## A gradient boosted model with multinomial loss function.
+## 150 iterations were performed.
+## There were 53 predictors of which 53 had non-zero influence.</code></pre>
+<pre class="r"><code># plot the model
+plot(model_GBM)</code></pre>
+<p><img src="figure-html/unnamed-chunk-22-1.png" width="672" /></p>
+<ol start="2" style="list-style-type: decimal">
+<li>Validate the model</li>
+</ol>
+<pre class="r"><code># prediction on test data
+predict_GBM &lt;- predict(model_GBM, model_test)
+result_GBM &lt;- confusionMatrix(predict_GBM, model_test$classe)
+result_GBM</code></pre>
+<pre><code>## Confusion Matrix and Statistics
+## 
+##           Reference
+## Prediction    A    B    C    D    E
+##          A 1666    8    0    0    0
+##          B    8 1127    8    1    6
+##          C    0    4 1015   13    2
+##          D    0    0    3  949   11
+##          E    0    0    0    1 1063
+## 
+## Overall Statistics
+##                                           
+##                Accuracy : 0.989           
+##                  95% CI : (0.9859, 0.9915)
+##     No Information Rate : 0.2845          
+##     P-Value [Acc &gt; NIR] : &lt; 2.2e-16       
+##                                           
+##                   Kappa : 0.986           
+##  Mcnemar's Test P-Value : NA              
+## 
+## Statistics by Class:
+## 
+##                      Class: A Class: B Class: C Class: D Class: E
+## Sensitivity            0.9952   0.9895   0.9893   0.9844   0.9824
+## Specificity            0.9981   0.9952   0.9961   0.9972   0.9998
+## Pos Pred Value         0.9952   0.9800   0.9816   0.9855   0.9991
+## Neg Pred Value         0.9981   0.9975   0.9977   0.9970   0.9961
+## Prevalence             0.2845   0.1935   0.1743   0.1638   0.1839
+## Detection Rate         0.2831   0.1915   0.1725   0.1613   0.1806
+## Detection Prevalence   0.2845   0.1954   0.1757   0.1636   0.1808
+## Balanced Accuracy      0.9967   0.9923   0.9927   0.9908   0.9911</code></pre>
+<pre class="r"><code># plot the prediction result 
+
+plot(result_GBM$table, 
+     col = result_GBM$byClass,
+     main = paste('Generalized Boosted Model: Accuracy = ', 
+                  round(result_GBM$overall['Accuracy'],4) * 100,
+                  '%'))</code></pre>
+<p><img src="figure-html/unnamed-chunk-21-1.png" width="672" /></p>
+<p>The accuracy of above model is 98.90% and its out-of-sample error is only 1.10% which is also good.</p>
+</div>
+</div>
+<div id="concludsion-of-model-selection" class="section level3">
+<h3>Concludsion of Model Selection</h3>
+<p>The accuracy of above 3 regression modeling algorithm are: 
+  <ol>
+    <li>Classification Tree: 77.15%</li>
+    <li>Random Forest: 99.78%</li>
+    <li>Generalized Boosted Model: 98.90%</li>
+  </ol>
+</p>
+<p>As Random Forest produce the highest accuracy among the 3 algorithms. I will apply it to predict the result from test dataset.</p>
+</div>
+</div>
+<div id="predict-the-result" class="section level2">
+<h2>Predict the result</h2>
+<pre class="r"><code>predict_final &lt;- predict(model_randomForest, dt_test)
+predict_final</code></pre>
+<pre><code>##  [1] B A B A A E D B A A B C B A E E A B B B
+## Levels: A B C D E</code></pre>
+</div>
+
+
+
+
+</div>
+
+<script>
+
+// add bootstrap table styles to pandoc tables
+function bootstrapStylePandocTables() {
+  $('tr.header').parent('thead').parent('table').addClass('table table-condensed');
+}
+$(document).ready(function () {
+  bootstrapStylePandocTables();
+});
+
+
+</script>
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>
