@@ -1,0 +1,299 @@
+---
+title: "Practical Machine Learning Project"
+author: "jtang"
+date: "February 23, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Overview
+The goald of this project is to predict the manner in which they did the exercise. 
+
+
+## Data
+* The training data for this project are available here:
+  https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+* The test data are available here:
+  https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+  
+###  Loading Data 
+```{r echo=FALSE, cache=TRUE}
+
+if (!exists('raw_train')) {
+  download.file('https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv', destfile = 'data/pml-training.csv')
+  raw_train <- read.csv('data/pml-training.csv', header = TRUE, na.strings = c('NA','','#DIV/0!'))
+}
+
+if (!exists('raw_test')) {
+  download.file('https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv', destfile = 'data/pml-testing.csv')
+  raw_test <- read.csv('data/pml-testing.csv', header = TRUE, na.strings = c('NA','','#DIV/0!'))
+}
+
+```
+
+Train set and Test Schema Verification
+```{r}
+
+# Confirm both training set and test set contain identical variables 
+#  - excluding variable 'classe' from training set 
+#  - excluding variable 'problem_id' from test set
+
+all.equal(colnames(raw_train)[1:(ncol(raw_train) - 1)], 
+          colnames(raw_test)[1:(ncol(raw_train) - 1)])
+```
+
+### Exploratory Data Analysis
+
+Trainging data set
+```{r, cache=TRUE}
+# trainging data
+
+dim(raw_train)
+
+# testing data
+dim(raw_test)
+
+
+# head(dt_train)
+
+```
+
+
+### Prepare Environments
+```{r warning=FALSE, message=FALSE}
+
+library(caret)
+library(gbm)
+library(randomForest)
+library(rpart)
+library(rpart.plot)
+library(corrplot)
+library(rattle)
+library(RColorBrewer)
+library(e1071)
+set.seed(2019)
+
+```
+
+### Data Cleaning and Tidying
+
+1. Remove variables that contain any missing values.
+```{r}
+dt_train <- raw_train[, colSums(is.na(raw_train)) == 0]
+dt_test <- raw_test[, colSums(is.na(raw_test)) == 0]
+
+# dimension of training set
+dim(dt_train)
+colnames(dt_train)
+
+# dimension of test set
+dim(dt_test)
+colnames(dt_test)
+```
+
+1. Remove identification variables which have no impacts on the prediction outcome: **classe**
+```{r}
+
+dt_train <- dt_train[, -(1:5)]
+dt_test <- dt_test[, -(1:5)]
+
+# dimension of training set
+dim(dt_train)
+
+# dimension of test set
+dim(dt_test)
+```
+2. Remove variables which variance are near zero
+```{r}
+near_zero <- nearZeroVar(dt_train)
+dt_train <- dt_train[, -near_zero]
+
+dim(dt_train)
+```
+
+
+### Split training set for model training
+Partition training set into 70% as train data for the modeling process, and 30% as test data for the model validation. The original test set remains unchanged.  
+```{r}
+model_train_split <- createDataPartition(dt_train$classe, p = 0.7, list = FALSE)
+model_train = dt_train[model_train_split, ]
+model_test = dt_train[-model_train_split, ]
+
+```
+```{r}
+dim(model_train)
+
+```
+```{r}
+dim(model_test)
+
+```
+
+### Variable Correlation Analysis
+```{r}
+corr_matrix <- cor(model_train[, -54])
+corrplot(corr_matrix, 
+         order="FPC", method = 'circle', type='upper',
+         tl.cex = 0.6, tl.offset = 0.5, tl.col = 'darkblue')
+
+```
+
+*The highly correlated variables are shown in dark circle in the figure above.*
+
+The names of highly correlated variables are
+```{r}
+names(model_train)[findCorrelation(corr_matrix, cutoff = 0.75)]
+```
+
+
+
+## Prediction Model Building
+To model the regressions, there are three commonly applied algorithms:
+1. classification tree
+2. Random Forest
+3. Generalized Boosted Model
+
+I will examine the performance of each algorithm and choose the best algorithm for this project.
+
+### Select Prediction Algorithm
+
+#### 1. Algorithm: Classification Tree 
+1. Train the model using classification tree
+```{r}
+model_decisionTree <- rpart(classe ~., data = model_train, method = 'class')
+fancyRpartPlot(model_decisionTree)
+
+```
+
+```{r}
+# plot the model
+plot(model_decisionTree)
+
+```
+
+
+2. Validate the model
+```{r}
+# prediction on test data
+predict_decisionTree <- predict(model_decisionTree, model_test, type='class')
+result_decisionTree <- confusionMatrix(predict_decisionTree, model_test$classe)
+result_decisionTree
+```
+
+
+```{r}
+# plot the prediction result 
+
+plot(result_decisionTree$table, 
+     col = result_decisionTree$byClass,
+     main = paste('Classfication Tree: Accuracy = ', 
+                  round(result_decisionTree$overall['Accuracy'],4) * 100,
+                  '%'))
+ 
+```
+
+The accuracy of above model is 77.15% and its *out-of-sample error* is 22.85%. 
+
+#### 2. Algorithm: Random Forest
+1. Train the model using Random Forest
+```{r}
+model_randomForest <- train(classe ~., 
+                            data = model_train,
+                            method = 'rf',
+                            trControl = trainControl(method="cv", 
+                                                     number=4,
+                                                     verboseIter = FALSE))
+model_randomForest$finalModel
+
+```
+
+```{r}
+# plot the model
+plot(model_randomForest)
+
+```
+
+2. Validate the model
+```{r}
+# prediction on test data
+predict_randomForest <- predict(model_randomForest, model_test)
+result_randomForest <- confusionMatrix(predict_randomForest, model_test$classe)
+result_randomForest
+```
+
+```{r}
+# plot the prediction result 
+
+plot(result_randomForest$table, 
+     col = result_randomForest$byClass,
+     main = paste('Random Forest: Accuracy = ', 
+                  round(result_randomForest$overall['Accuracy'],4) * 100,
+                  '%'))
+ 
+```
+
+The accuracy of above model is 99.78% and its out-of-sample error is only 0.22% which is every good.
+
+#### 3. Algorithm: Generalized Boosted Model
+1. Train the model using Generalized Boosted Model
+```{r}
+model_GBM <- train(classe ~., 
+                    data = model_train,
+                    method = 'gbm',
+                    trControl = trainControl(method="repeatedcv", 
+                                             number= 5,
+                                             repeats = 1,
+                                             verboseIter = FALSE),
+                   verbose = FALSE)
+
+model_GBM$finalModel
+
+```
+
+```{r}
+# plot the model
+plot(model_GBM)
+
+```
+
+2. Validate the model
+```{r}
+# prediction on test data
+predict_GBM <- predict(model_GBM, model_test)
+result_GBM <- confusionMatrix(predict_GBM, model_test$classe)
+result_GBM
+```
+
+```{r}
+# plot the prediction result 
+
+plot(result_GBM$table, 
+     col = result_GBM$byClass,
+     main = paste('Generalized Boosted Model: Accuracy = ', 
+                  round(result_GBM$overall['Accuracy'],4) * 100,
+                  '%'))
+ 
+```
+
+The accuracy of above model is 98.90% and its out-of-sample error is only 1.10% which is also good.
+
+### Concludsion of Model Selection
+The accuracy of above 3 regression modeling algorithm are:
+
+1. Classification Tree: 77.15%
+2. Random Forest: 99.78%
+3. Generalized Boosted Model: 98.90%
+
+As Random Forest produce the highest accuracy among the 3 algorithms. I will apply it to predict the result from test dataset.
+
+
+## Predict the result
+```{r}
+predict_final <- predict(model_randomForest, dt_test)
+predict_final
+```
+
